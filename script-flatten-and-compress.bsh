@@ -1,0 +1,207 @@
+#!/bin/bash
+#[of]:comments
+#[c]steps
+#[c]  flatten all includes
+#[c]  remove comments and blank lines
+#[c]  wrap in decompressor script
+#[cf]
+#[of]:functions
+#[of]:base
+#[of]:cleancat() {
+cleancat() {
+#[of]:  usage
+  if [ $# -gt 1 ] ; then
+    echo "Usage: cleancat [filename]|[redirect]"
+    echo "Error: must have 0 or 1 argument"
+    echo "Description: dumps a file or pipe removing blank lines and comments"
+    echo "Examples:"
+    echo '  cleancat ${lc_main_filename}'
+    echo '  bigdataapp | cleancat'
+    echo '  cleancat < echo "A Test String"'
+    echo "Returns:"
+    echo "  0 success"
+    exit 1
+  fi
+#[cf]
+  if [[ -n "$1" ]] ; then
+    [[ ! -r "$1" ]] && die 1 "could not read file $1"
+    grep -v -e "^[[:blank:]]*$" -e "^[[:blank:]]*#" "$1" 2>/dev/null
+  else
+    grep -v -e "^[[:blank:]]*$" -e "^[[:blank:]]*#" 2>/dev/null
+  fi
+}
+#[cf]
+#[of]:isset() {
+isset() {
+  eval "(( \${$1+1} ))"
+}
+#[cf]
+#[cf]
+#[of]:flatten() {
+flatten() {
+  (($#<2)) && return 1
+
+  buffer1="$(grep -v '[[:blank:]]*#\[l\]' "$1")"
+  declare -A gl_includes
+  
+  gl_pass=0
+  while : ; do
+    echo "pass $((++gl_pass))"
+    buffer2="$(
+      gl_line=0
+      skipflag=0
+      while IFS=$'\n' read -r i;do
+        ((gl_line++))
+        if j="$(echo "${i}" | grep -m1 -oP '^[[:blank:]]*\K(\.|source|include) [[:graph:]]+')" ; then
+#[of]:          debug to skip certain includes
+#[c]        if echo "${i}" | grep -qP '(hash\.sclass|referenceid\.sclass|classcommonenv\.sh)' ; then
+#[c]        if echo "${i}" | grep -qP '(classcommonenv\.sh)' ; then
+#[c]          echo "${i}"
+#[c]          echo "rh ${gl_line} ${i}" >&2
+#[c]          continue
+#[c]        fi
+
+#[c]        if ((skipflag)) ; then
+#[c]          echo "${i}"
+#[c]          continue
+#[c]        fi
+#[c]        if echo "${i}" | grep -qP '(classcommonenv\.sh)' && [[ -n "${i##. \${d\}{*}" ]]  ; then
+#[c]          skipflag=1
+#[c]        fi
+#[cf]
+  
+          i="${j}"
+          {
+            i="${i#\. }"
+            i="${i#source }"
+#[of]:            if [[ -z "${i##*\\${*}" ]] ; then
+          if [[ -z "${i##*\${*}" ]] ; then
+#[of]:            if [[ -z "${i##\\${d\\}{*}" ]] ; then
+            if [[ -z "${i##\${q\}\$*}" ]] ; then
+              echo ". ${i}"
+              echo "aaa ${gl_line} . ${i}" >&2
+            elif [[ -z "${i##\${d\}{*}" ]] ; then
+              j=""
+              while [[ "${i}" != "${j}" ]] ; do
+                j="${i}"
+                [[ -z "${i##\${d\}{*}" ]] && i="\$${i#\${d\}}"
+                if [[ -z "${i##*\${*}" ]] ; then
+                  v="${i#*\${}"
+                  v="${v%%\}*}"
+                  f="${i%\${${v}\}*}"
+                  b="${i#*\${${v}\}}"
+                  if r="$(echo "${buffer1}" | grep -m1 -oP "^[[:blank:]]*${v}=[\"\']*\\K[^\"']+(?=[\"']*)")" ; then
+                    i="${f}${r}${b}"
+                  elif  r="$(set | grep -m1 -oP "^[[:blank:]]*${v}=[\"\']*\\K[^\"']+(?=[\"']*)")" ; then
+                    i="${f}${r}${b}"
+                  fi
+                fi
+              done
+              if [[ -n "${i##*\${*}" ]] ; then
+                b="$(grep -v '^[[:blank:]]*#\[l\]' "${i}")"
+                b="${b//\"/\\\"}"
+                b="${b//\$/\\\$}"
+                b="${b//\`/\\\`}"
+                echo "${b}"
+              else
+                echo ". ${i}"
+                echo "bbb ${gl_line} . ${i}" >&2
+              fi
+#[cf]
+#[of]:            else
+            else
+              v="${i#*\${}"
+              v="${v%%\}*}"
+              f="${i%\${${v}\}*}"
+              b="${i#*\${${v}\}}"
+              if r="$(echo "${buffer1}" | grep -m1 -oP "^[[:blank:]]*${v}=[\"\']*\\K[^\"']+(?=[\"']*)")" ; then
+                echo ". ${f}${r}${b}"
+                echo "a ${gl_line} . ${f}${r}${b}" >&2
+              elif  r="$(set | grep -m1 -oP "^[[:blank:]]*${v}=[\"\']*\\K[^\"']+(?=[\"']*)")" ; then
+                echo ". ${f}${r}${b}"
+                echo "b ${gl_line} . ${f}${r}${b}" >&2
+              else
+                echo ". ${i}"
+                echo "c ${gl_line} . ${i}" >&2
+              fi
+#[cf]
+            fi
+#[cf]
+#[of]:            elif [[ -z "${i##include *}" ]] ; then
+          elif [[ -z "${i##include *}" ]] ; then
+            #multiplue includes of the same type need to be ignored
+            i="${i#include }"
+            if ! isset gl_includes["${i}"] ; then
+              gl_includes["${i}"]=""
+              i="${i%.sclass}"
+              if [[ -n "${i##*/*}" ]] ; then
+                echo ". \${gl_objectshbase}/sclass/${i}.sclass"
+                echo "d ${gl_line} . \${gl_objectshbase}/sclass/${i}.sclass" >&2
+              else
+                grep -v '^[[:blank:]]*#\[l\]' ${i}.sclass
+                echo "e ${gl_line} cat ${i}.sclass" >&2
+               fi
+            fi
+#[cf]
+#[of]:            else
+          else
+            grep -v '^[[:blank:]]*#\[l\]' "${i}"
+            echo "f ${gl_line} cat ${i}" >&2
+#[cf]
+            fi
+          }
+        else
+          echo "${i}"
+        fi
+      done < <(echo "${buffer1}")
+    )"
+    if [[ "${buffer1}" = "${buffer2}" ]] ; then
+      echo "${buffer2}" > "$2"
+      chmod 750 "$2"
+      break
+    fi
+    buffer1="${buffer2}"
+    echo
+#[c]    echo "${buffer1}" > "${2%.bsh}${gl_pass}.bsh"
+#[c]    chmod 750 "${2%.bsh}${gl_pass}.bsh"
+#[c]    ((gl_pass>5)) && break
+  done
+  echo done
+}
+#[cf]
+#[of]:compressAndWrap() {
+compressAndWrap() {
+  (($#<2)) && return 1
+
+  IFS='' read -r -d '' gl_header <<'EOF'
+eval "$(cat "$0" | (while read -r i;do [ "${i}" == "#ENDOFCOMPRESSIONWRAPPER" ] && break;done;gunzip -c))"
+exit $?
+#ENDOFCOMPRESSIONWRAPPER
+EOF
+  
+  echo -n "${gl_header}" > "$2"
+  cleancat "$1" | gzip -9c >> "$2"
+  chmod 750 "$2"
+}
+#[cf]
+#[cf]
+#[of]:main
+
+gl_fileInput="$1"
+
+gl_fileOutput="${gl_fileInput##*/}"
+
+
+gl_fileOutput="${gl_fileOutput}-flattend"
+flatten "${gl_fileInput}" "${gl_fileOutput}"
+gl_fileInput="${gl_fileOutput}"
+
+gl_fileOutput="${gl_fileInput}-stripped"
+cleancat "${gl_fileInput}" > "${gl_fileOutput}"
+chmod 750 "${gl_fileOutput}"
+gl_fileInput="${gl_fileOutput}"
+
+compressAndWrap "${gl_fileInput}" "${gl_fileOutput}-compresswrapped"
+
+#[cf]
+# vim:number:tabstop=2:shiftwidth=2:autoindent:foldmethod=marker:foldlevel=0:foldmarker=#[of]\:,#[cf]
