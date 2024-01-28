@@ -150,55 +150,6 @@ die() {
   exit ${lc_die_return:-1}
 }
 #[cf]
-#[of]:instring() {
-instring() {
-#[of]:  usage
-  if [ $# -ne 3 ] ; then
-    echo 'Usage: instring {!|-|var} "{string}" {pattern}'
-    echo "Error: must have at least 3 args"
-    echo "Description:"
-    echo "  returns the index of a pattern within a given string"
-    echo "    var|stdout = the index of the match 0-n"
-    echo "             if no match -1"
-    echo "Examples:"
-    echo "  if found _position will be set with the index of YYYY"
-    echo '    _position=$(instring - "${_format}" YYYY)'
-    echo '    instring _position "${_format}" YYYY'
-    echo "Returns:"
-    echo "  0 success"
-    echo "  1 no match"
-    exit 1
-  fi
-#[cf]
-  typeset lc_instring_index lc_instring_string lc_instring_pattern lc_instring_searchlength lc_instring_result lc_instring_return
-  lc_instring_string="$2"
-  lc_instring_pattern="$3"
-  lc_instring_searchlength=$((1 + ${#lc_instring_string} - ${#lc_instring_pattern}))
-  lc_instring_index=0
-  if [[ -n "${lc_instring_pattern}" ]] ; then
-    while [[ ${lc_instring_index} -lt ${lc_instring_searchlength} ]] ; do
-      if eval "[[ \"\${lc_instring_string}\" != \"\${lc_instring_string#@(${lc_instring_pattern})}\" ]]" ; then
-        lc_instring_result=${lc_instring_index}
-        lc_instring_return=0
-        break
-      fi
-      lc_instring_string="${lc_instring_string#?}"
-      lc_instring_index=$(( lc_instring_index + 1 ))
-    done
-  else
-    lc_instring_result=0
-    lc_instring_return=0
-  fi
-  if [[ "$1" = "!" ]] ; then
-      :
-  elif [[ "$1" = "-" ]] ; then
-    echo ${lc_instring_result:--1}
-  else
-    eval $1=\"\${lc_instring_result:--1}\"
-  fi
-  return ${lc_instring_return:-1}
-}
-#[cf]
 #[of]:isset() {
 isset() {
   eval "(( \${$1+1} ))"
