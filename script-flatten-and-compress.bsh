@@ -398,7 +398,7 @@ fi
 EOF
   
   echo -n "${gl_header}" > "$2"
-  cleancat "$1" | gzip -9c >> "$2"
+  cat "$1" | gzip -9c >> "$2"
   chmod 750 "$2"
 }
 #[cf]
